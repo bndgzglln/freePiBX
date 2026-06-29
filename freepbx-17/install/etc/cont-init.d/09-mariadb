@@ -1,0 +1,36 @@
+#!/usr/bin/with-contenv bash
+
+source /assets/functions/00-container
+prepare_service 10-freepbx
+# shellcheck disable=SC2034
+PROCESS_NAME="mariadb"
+
+if var_true "$DB_EMBEDDED" ;  then
+  silent service mariadb stop
+  mkdir -p /var/lib/mysql
+
+  if [ ! -d /var/lib/mysql/mysql ]; then
+    print_info "New embedded database detected, setting up.."
+    cp -R /assets/config/var/lib/mysql/* /var/lib/mysql
+  fi
+
+  chown -R mysql. /var/lib/mysql
+  silent service mariadb start
+
+  print_info "Waiting for MariaDB to be ready..."
+  for i in $(seq 1 30); do
+    if mysqladmin ping --silent 2>/dev/null; then
+      print_info "MariaDB is ready"
+      break
+    fi
+    if [ "$i" -eq 30 ]; then
+      print_error "MariaDB failed to start within 30 seconds"
+      exit 1
+    fi
+    sleep 1
+  done
+else
+  print_info "No embedded database detected, skip.."
+fi
+
+liftoff

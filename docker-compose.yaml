@@ -1,0 +1,25 @@
+services:
+  freepbx-app:
+    container_name: freepbx-app
+    image: bndgzglln23/pibpx:latest
+    volumes:
+      - ./data/certs:/certs
+      - ./data/data:/data
+      - ./data/logs:/var/log
+      - ./data/www:/var/www/html
+      - ./data/db:/var/lib/mysql
+    environment:
+      - HTTP_PORT=8099
+      - HTTPS_PORT=8443
+      - RTP_START=10000
+      - RTP_FINISH=11000
+      - DB_EMBEDDED=TRUE
+      - DEBUG_MODE=FALSE
+      - ENABLE_SSL=FALSE
+      - ENABLE_FOP=FALSE
+      - UCP_FIRST=TRUE
+    restart: always
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+    privileged: true
