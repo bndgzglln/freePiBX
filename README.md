@@ -203,7 +203,7 @@ For cross-platform builds (e.g., building on x86 for ARM64):
 
 ```bash
 docker buildx create --name pibx-builder --use
-docker buildx build --platform linux/arm64 -t bndgzglln23/pibpx:latest --push .
+docker buildx build --platform linux/arm64 -t your-user/image-name:tag --push .
 ```
 
 ---
