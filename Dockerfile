@@ -26,7 +26,7 @@ RUN set -x && \
             logrotate \
             msmtp \
             nano \
-            ssh-keygen \
+            openssh-client \
             net-tools \
             netcat-openbsd \
             procps \
