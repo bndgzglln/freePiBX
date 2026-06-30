@@ -8,6 +8,7 @@ services:
       - ./data/logs:/var/log
       - ./data/www:/var/www/html
       - ./data/db:/var/lib/mysql
+      - ./data/var/www/Caddyfile:/etc/caddy/Caddyfile:ro
     environment:
       - HTTP_PORT=8099
       - HTTPS_PORT=8443
@@ -19,7 +20,14 @@ services:
       - ENABLE_FOP=FALSE
       - UCP_FIRST=TRUE
     restart: always
-    network_mode: "host"
+    ports:
+      - "8099:8099"
+      - "8443:8443"
+      - "5060:5060/udp"
+      - "5160:5160/udp"
+      - "5061:5061"
+      - "5161:5161"
+      - "10000-10100:10000-10100/udp"
     cap_add:
       - NET_ADMIN
     privileged: true

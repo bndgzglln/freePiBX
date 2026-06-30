@@ -6,6 +6,7 @@ prepare_service single
 PROCESS_NAME="fail2ban"
 
 if var_true "$ENABLE_FAIL2BAN" ;  then
+	rm -f /var/run/fail2ban/fail2ban.sock
 	sed -i -e "s/logtarget = \/var\/log\/fail2ban.log/logtarget = \/var\/log\/fail2ban\/fail2ban.log/g" /etc/fail2ban/fail2ban.conf
 	rm -rf /etc/fail2ban/jail.d/*
 	mkdir -p /var/log/asterisk/
@@ -39,7 +40,7 @@ ignoreip = 127.0.0.1/8
 [freepbx-iptables]
 backend = auto
 enabled  = true
-filter   = asterisk
+filter   = freepbx
 logpath  = /var/log/asterisk/freepbx_security.log
 maxretry = 5
 bantime = 86400

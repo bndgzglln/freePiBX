@@ -36,12 +36,23 @@ print_notice "Setting file permissions"
 mkdir -p /data/etc/asterisk
 mkdir -p /data/var/lib/asterisk/{bin,playback}
 mkdir -p /data/var/spool/asterisk/{backup,cache,dictate,fax,meetme,monitor,outgoing,recording,system,tmp,voicemail}
-mkdir -p /data/var/run/asterisk
 mkdir -p /data/home/asterisk
 mkdir -p /home/asterisk
 ln -sf /data/home/asterisk /home/asterisk
-chown -R asterisk. /data
+chown -R asterisk. /data 2>/dev/null || true
+mkdir -p /var/run/asterisk
+chown -R asterisk. /var/run/asterisk
 chmod +x /usr/lib/asterisk/modules/*
+
+### Generate SSH key for backup module if missing
+if [ ! -f /home/asterisk/.ssh/id_ecdsa ]; then
+  print_notice "Generating SSH key for asterisk user (required by backup module)"
+  mkdir -p /home/asterisk/.ssh
+  ssh-keygen -t ecdsa -f /home/asterisk/.ssh/id_ecdsa -N '' -q
+  chown -R asterisk:asterisk /home/asterisk/.ssh
+  chmod 700 /home/asterisk/.ssh
+  chmod 600 /home/asterisk/.ssh/id_ecdsa
+fi
 
 ### Check if FreePBX installed
 if [ ! -f "$WEBROOT"/admin/index.php ]; then
@@ -115,7 +126,7 @@ EOF
 
   if [ ! -f /etc/asterisk/dongle.conf ]; then
     mkdir -p /var/lib/asterisk/smsdb
-    chown -RH asterisk. /var/lib/asterisk/smsdb
+    chown -RH asterisk. /var/lib/asterisk/smsdb 2>/dev/null || true
 
     cat <<EOF > /etc/asterisk/dongle.conf
 [general]
@@ -159,6 +170,14 @@ EOF
     print_error "Can't seem to start Asterisk.. exiting"
     exit 1
   fi
+
+  for i in $(seq 1 15); do
+    if [ -S /var/run/asterisk/asterisk.ctl ]; then
+      chown asterisk. /var/run/asterisk/asterisk.ctl 2>/dev/null || true
+      break
+    fi
+    sleep 1
+  done
 
   if var_false "$DB_EMBEDDED" ;  then
     print_notice "Installing FreePBX $FREEPBX_VERSION source code"
@@ -226,13 +245,21 @@ EOF
   print_notice "- backup, callrecording, conferences, dashboard, featurecodeadmin, filestore, fw_langpacks, infoservices, languages, logfiles, music, recordings, sipsettings, soundlang, voicemail"
   check_process
   silent fwconsole ma downloadinstall backup callrecording conferences dashboard featurecodeadmin filestore fw_langpacks infoservices languages logfiles music recordings sipsettings soundlang voicemail
+
+  ### Ensure voicemail_admin table exists (required by core module reload)
+  if var_true "$DB_EMBEDDED" ; then
+    mysql -e 'USE asterisk; CREATE TABLE IF NOT EXISTS voicemail_admin (variable VARCHAR(255) NOT NULL, value TEXT, PRIMARY KEY (variable)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;' 2>/dev/null || true
+  else
+    mysql -u"$DB_USER" -p"$DB_PASS" -h"$DB_HOST" -P"$DB_PORT" "$DB_NAME" -e 'CREATE TABLE IF NOT EXISTS voicemail_admin (variable VARCHAR(255) NOT NULL, value TEXT, PRIMARY KEY (variable)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;' 2>/dev/null || true
+  fi
+
   print_notice "- certman, userman, pm2"
   check_process
   silent fwconsole ma downloadinstall certman userman pm2
   silent fwconsole setting SHOWLANGUAGE 1
   silent fwconsole chown
   silent fwconsole reload
-  chown -RH asterisk. /home/asterisk/.npm
+  chown -RH asterisk. /home/asterisk/.npm 2>/dev/null || true
   print_notice "- ucp"
 ### UCP fix https://community.freepbx.org/t/ucp-upgrade-error/58273
   touch /usr/bin/icu-config
@@ -276,7 +303,7 @@ if [ ! -f /data/etc/amportal.conf ]; then
   cp -R /etc/amportal.conf /data/etc/
   rm -f /etc/amportal.conf
   touch /data/etc/amportal.conf
-  chown asterisk. /data/etc/amportal.conf
+  chown asterisk. /data/etc/amportal.conf 2>/dev/null || true
   ln -s /data/etc/amportal.conf /etc/amportal.conf
 else
   ln -sf /data/etc/amportal.conf /etc/amportal.conf
@@ -289,7 +316,7 @@ if var_true "$DB_EMBEDDED" ;  then
     cp -R /etc/freepbx.conf /data/etc/
     rm -f /etc/freepbx.conf
     touch /data/etc/freepbx.conf
-    chown asterisk. /data/etc/freepbx.conf
+    chown asterisk. /data/etc/freepbx.conf 2>/dev/null || true
     ln -s /data/etc/freepbx.conf /etc/freepbx.conf
   else
     ln -sf /data/etc/freepbx.conf /etc/freepbx.conf
@@ -299,6 +326,9 @@ if var_true "$DB_EMBEDDED" ;  then
 ### Set RTP ports and fix a FreePBX bug with upgrades
   print_notice "Setting RTP ports - start: '${RTP_START}' finish: '${RTP_FINISH}'"
   mysql -e 'USE asterisk; ALTER TABLE featurecodes CHANGE column helptext helptext VARCHAR(10000); INSERT INTO sipsettings (keyword, data, seq, type) VALUES ("rtpstart","'"$RTP_START"'",1,0) ON DUPLICATE KEY UPDATE data="'"$RTP_START"'";INSERT INTO sipsettings (keyword, data, seq, type) VALUES ("rtpend","'"$RTP_FINISH"'",1,0) ON DUPLICATE KEY UPDATE data="'"$RTP_FINISH"'";'
+
+### Ensure voicemail_admin table exists (required by core module reload)
+  mysql -e 'USE asterisk; CREATE TABLE IF NOT EXISTS voicemail_admin (variable VARCHAR(255) NOT NULL, value TEXT, PRIMARY KEY (variable)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;' 2>/dev/null || true
 else
 ### Setup dynamic configuration
   print_notice "Setting configuration"
@@ -342,6 +372,9 @@ EOF
 ### Set RTP ports and fix a FreePBX bug with upgrades
   print_notice "Setting RTP ports - start: '${RTP_START}' finish: '${RTP_FINISH}'"
   mysql -u"$DB_USER" -p"$DB_PASS" -h"$DB_HOST" -P"$DB_PORT" -e 'USE '"$DB_NAME"'; ALTER TABLE featurecodes CHANGE column helptext helptext VARCHAR(10000); INSERT INTO sipsettings (keyword, data, seq, type) VALUES ("rtpstart","'"$RTP_START"'",1,0) ON DUPLICATE KEY UPDATE data="'"$RTP_START"'";INSERT INTO sipsettings (keyword, data, seq, type) VALUES ("rtpend","'"$RTP_FINISH"'",1,0) ON DUPLICATE KEY UPDATE data="'"$RTP_FINISH"'";'
+
+### Ensure voicemail_admin table exists (required by core module reload)
+  mysql -u"$DB_USER" -p"$DB_PASS" -h"$DB_HOST" -P"$DB_PORT" "$DB_NAME" -e 'CREATE TABLE IF NOT EXISTS voicemail_admin (variable VARCHAR(255) NOT NULL, value TEXT, PRIMARY KEY (variable)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;' 2>/dev/null || true
 fi
 
 if [ ! -f /etc/asterisk/cdr_adaptive_odbc.conf ]; then
@@ -354,7 +387,7 @@ loguniqueid=yes
 EOF
 fi
 
-chown asterisk. /etc/freepbx.conf
+chown asterisk. /etc/freepbx.conf 2>/dev/null || true
 
 print_info "Starting Asterisk ${ASTERISK_VERSION}"
 
@@ -363,16 +396,16 @@ if [ ! -f "/usr/sbin/fwconsole" ]; then
   exit 1
 fi
 
-chown -RH asterisk. /etc/asterisk
-chown asterisk. /etc/amportal.conf
+chown -RH asterisk. /etc/asterisk 2>/dev/null || true
+chown asterisk. /etc/amportal.conf 2>/dev/null || true
 
 ### Custom file support
 if [ -d /assets/custom ] ; then
   print_warn "Custom files found, copying over top of original.."
   cp -R /assets/custom/* /
-  chown -R asterisk. /var/www/html
-  chown -RH asterisk. /var/lib/asterisk
-  chown -RH asterisk. /var/spool/asterisk
+  chown -R asterisk. /var/www/html 2>/dev/null || true
+  chown -RH asterisk. /var/lib/asterisk 2>/dev/null || true
+  chown -RH asterisk. /var/spool/asterisk 2>/dev/null || true
 fi
 
 ## Execute Custom Scripts
@@ -384,7 +417,7 @@ if [ -d /assets/custom-scripts/ ] ; then
     done
 fi
 
-chown -RH asterisk. /var/spool/asterisk
+chown -RH asterisk. /var/spool/asterisk 2>/dev/null || true
 rm -f /tmp/cron.error
 
 check_process

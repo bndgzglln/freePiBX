@@ -26,6 +26,7 @@ RUN set -x && \
             logrotate \
             msmtp \
             nano \
+            ssh-keygen \
             net-tools \
             netcat-openbsd \
             procps \
@@ -52,7 +53,7 @@ RUN set -x && \
     dpkg-reconfigure -f noninteractive tzdata
 
 ### Networking configuration
-EXPOSE 1025 8025 10050/TCP
+EXPOSE 1025 8025 10050/tcp
 
 ### Add folders
 ADD debian-buster/install /
@@ -204,6 +205,7 @@ RUN set -x && \
                     mariadb-client \
                     mariadb-server \
                     mpg123 \
+                    openssh-client \
                     php${PHP_VERSION} \
                     php${PHP_VERSION}-curl \
                     php${PHP_VERSION}-cli \
@@ -246,7 +248,8 @@ RUN set -x && \
     cd build && \
     cmake ../ -LH -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DWITH_SSL=OPENSSL && \
     cmake --build . --config Release && \
-    make install
+    make install && \
+    ln -sf /usr/local/lib/mariadb/libmaodbc.so /usr/local/lib/libmaodbc.so
 
 ### Build SpanDSP
 RUN set -x && \
@@ -351,6 +354,8 @@ RUN set -x && \
 RUN set -x && \
     sed -i -e "s/memory_limit = 128M/memory_limit = 512M/g" /etc/php/${PHP_VERSION}/apache2/php.ini && \
     sed -i 's/\(^upload_max_filesize = \).*/\120M/' /etc/php/${PHP_VERSION}/apache2/php.ini && \
+    echo '[mysqld]' > /etc/mysql/mariadb.conf.d/99-freepbx.cnf && \
+    echo 'lower_case_table_names=1' >> /etc/mysql/mariadb.conf.d/99-freepbx.cnf && \
     a2disconf other-vhosts-access-log.conf && \
     a2enmod rewrite && \
     a2enmod headers && \
@@ -367,13 +372,12 @@ RUN set -x && \
     mv /var/lib/asterisk /assets/config/var/lib/ && \
     ln -s /data/var/lib/asterisk /var/lib/asterisk && \
     ln -s /data/usr/local/fop2 /usr/local/fop2 && \
-    mkdir -p /assets/config/var/run/ && \
-    mv /var/run/asterisk /assets/config/var/run/ && \
+    mkdir -p /var/run/asterisk && \
+    chown asterisk. /var/run/asterisk && \
     mv /var/lib/mysql /assets/config/var/lib/ && \
     mkdir -p /assets/config/var/spool && \
     mv /var/spool/cron /assets/config/var/spool/ && \
     ln -s /data/var/spool/cron /var/spool/cron && \
-    ln -s /data/var/run/asterisk /var/run/asterisk && \
     rm -rf /var/spool/asterisk && \
     ln -s /data/var/spool/asterisk /var/spool/asterisk && \
     rm -rf /etc/asterisk && \

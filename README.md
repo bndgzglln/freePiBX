@@ -22,22 +22,22 @@ Docker containerizes the entire PBX stack so you can deploy a production-grade p
 
 ```
                     Host Network (network_mode: host)
-                    ┌─────────────────────────────────┐
+                    ┌──────────────────────────────────┐
                     │         Docker Container         │
                     │                                  │
-  HTTP/HTTPS ──────►│  Caddy (:80, :443)              │
+  HTTP/HTTPS ──────►│  Caddy (:80, :443)               │
                     │    └─ reverse_proxy              │
                     │       ├─ Apache (:8099)          │
                     │       └─ Apache (:8443)          │
                     │                                  │
-  SIP ─────────────►│  Asterisk (:5060/udp, :5160/udp)│
-  IAX ─────────────►│  Asterisk (:4569)               │
-  RTP ─────────────►│  Asterisk (:10000-11000/udp)    │
+  SIP ─────────────►│  Asterisk (:5060/udp, :5160/udp) │
+  IAX ─────────────►│  Asterisk (:4569)                │
+  RTP ─────────────►│  Asterisk (:10000-11000/udp)     │
                     │                                  │
                     │  MariaDB (embedded, :3306)       │
                     │  Fail2Ban                        │
                     │  s6-overlay (process supervisor) │
-                    └─────────────────────────────────┘
+                    └──────────────────────────────────┘
 ```
 
 ### Caddy as Reverse Proxy
@@ -47,6 +47,12 @@ Caddy runs **inside the same container** as Apache, managed by s6-overlay. This 
 - **Caddy** listens on `:80` and `:443` on the host
 - **Apache** listens internally on `:8099` (HTTP) and `:8443` (HTTPS)
 - Caddy proxies all traffic to Apache, handling HTTP/2, HTTP/3, and optional TLS termination
+
+The Caddyfile is mounted from `./data/var/www/Caddyfile` and can be edited to customize routing, add TLS, or configure additional domains. After editing, reload Caddy:
+
+```bash
+docker exec freepbx-app caddy reload --config /etc/caddy/Caddyfile
+```
 
 ### Host Network Mode
 
@@ -124,6 +130,7 @@ Open `http://<host-ip>/admin` in your browser. Create an admin account on first 
 | `./data/logs` | `/var/log` | Apache, Asterisk, system logs |
 | `./data/www` | `/var/www/html` | Web root (custom files) |
 | `./data/db` | `/var/lib/mysql` | MariaDB database files |
+| `./data/var/www/Caddyfile` | `/etc/caddy/Caddyfile` | Caddy reverse proxy config (editable) |
 
 ### Networking Ports
 
