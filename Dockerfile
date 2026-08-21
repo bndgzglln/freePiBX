@@ -67,6 +67,11 @@ LABEL maintainer="Dave Conroy (dave at tiredofit dot ca)"
 ENV ENABLE_CRON=FALSE \
     ENABLE_SMTP=FALSE
 
+### fail2ban must use xtables-legacy backend inside container (nft tables are incompatible)
+RUN set -x && \
+    update-alternatives --set iptables /usr/sbin/iptables-legacy && \
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
 ### Add users
 RUN adduser --home /app --gecos "Node User" --disabled-password nodejs && \
 \
