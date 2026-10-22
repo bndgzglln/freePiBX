@@ -91,6 +91,11 @@ RUN adduser --home /app --gecos "Node User" --disabled-password nodejs && \
 FROM elraro-nodejs-20-ubuntu-jammy
 LABEL maintainer="Dave Conroy (dave at tiredofit dot ca)"
 
+ARG RELEASE_VERSION=php82-php2shell-fix
+ARG RELEASE_NOTES="Refreshed PHP 8.2 packages to include the current PHP2Shell security fixes."
+LABEL org.opencontainers.image.version="${RELEASE_VERSION}" \
+      org.opencontainers.image.description="${RELEASE_NOTES}"
+
 ### https://dba.stackexchange.com/questions/316286/mongodb-install-on-arm
 ### OMG!
 ### Set defaults
@@ -171,6 +176,7 @@ RUN set -x && \
                         uuid-dev \
                         zlib1g-dev' && \
 ### Install runtime dependencies
+    apt-get update && \
     apt-get install --no-install-recommends -y \
                     $ASTERISK_BUILD_DEPS \
                     apache2 \

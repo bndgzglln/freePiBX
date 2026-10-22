@@ -196,8 +196,15 @@ Fail2Ban is enabled by default. For rules to trigger, enable the `security` log 
 ## Building the Image
 
 ```bash
-docker build -t bndgzglln23/pibpx:latest .
+docker build --pull --no-cache \
+  --build-arg RELEASE_VERSION=php82-php2shell-fix \
+  --build-arg 'RELEASE_NOTES=Refreshed PHP 8.2 packages to include the current PHP2Shell security fixes.' \
+  -t bndgzglln23/pibpx:latest .
 ```
+
+The `php82-php2shell-fix` image release refreshes the PHP 8.2 packages from the
+Ondřej PHP repository. The image includes OCI release metadata describing this
+security refresh.
 
 For cross-platform builds (e.g., building on x86 for ARM64):
 
