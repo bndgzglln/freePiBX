@@ -1,5 +1,4 @@
-FROM ubuntu:jammy AS elraro-ubuntu-jammy
-LABEL maintainer="Elraro (elraro at elraro dot eu)"
+FROM ubuntu:26.04 AS elraro-ubuntu-jammy
 
 ### Set defaults
 ENV S6_OVERLAY_VERSION=3.2.3.0 \
@@ -21,8 +20,9 @@ RUN set -x && \
             curl \
             dirmngr \
             dos2unix \
-            gnupg \
-            less \
+             gnupg \
+             iptables \
+             less \
             logrotate \
             msmtp \
             nano \
@@ -92,7 +92,7 @@ FROM elraro-nodejs-20-ubuntu-jammy
 LABEL maintainer="Dave Conroy (dave at tiredofit dot ca)"
 
 ARG RELEASE_VERSION=php82-php2shell-fix
-ARG RELEASE_NOTES="Refreshed PHP 8.2 packages to include the current PHP2Shell security fixes."
+ARG RELEASE_NOTES="Refreshed PHP 8.4 packages to include the current PHP2Shell security fixes."
 LABEL org.opencontainers.image.version="${RELEASE_VERSION}" \
       org.opencontainers.image.description="${RELEASE_NOTES}"
 
@@ -101,7 +101,7 @@ LABEL org.opencontainers.image.version="${RELEASE_VERSION}" \
 ### Set defaults
 ENV ASTERISK_VERSION=21.12.3 \
     BCG729_VERSION=1.1.1 \
-    PHP_VERSION=8.2 \
+    PHP_VERSION=8.5 \
     SPANDSP_VERSION=20180108 \
     RTP_START=10000 \
     RTP_FINISH=11000
@@ -110,7 +110,6 @@ ENV ASTERISK_VERSION=21.12.3 \
 RUN c_rehash && \
 ### Install dependencies
     set -x && \
-    add-apt-repository ppa:ondrej/php && \
     apt-get update && \
     apt-get -o Dpkg::Options::="--force-confold" upgrade -y
 
@@ -157,8 +156,9 @@ RUN set -x && \
                         libsndfile1-dev \
                         libsnmp-dev \
                         libspeex-dev \
-                        libspeexdsp-dev \
-                        libsqlite3-dev \
+                     libspeexdsp-dev \
+                     libspandsp-dev \
+                     libsqlite3-dev \
                         libsrtp2-dev \
                         libssl-dev \
                         libtiff-dev \
@@ -198,8 +198,7 @@ RUN set -x && \
                     libical3 \
                     libiodbc2 \
                     libiksemel3 \
-                    libicu70 \
-                    libicu-dev \
+                     libicu-dev \
                     libneon27 \
                     libosptk4 \
                     libresample1 \
@@ -217,18 +216,18 @@ RUN set -x && \
                     mariadb-server \
                     mpg123 \
                     openssh-client \
-                    php${PHP_VERSION} \
-                    php${PHP_VERSION}-curl \
-                    php${PHP_VERSION}-cli \
-                    php${PHP_VERSION}-mysql \
-                    php${PHP_VERSION}-gd \
-                    php${PHP_VERSION}-mbstring \
-                    php${PHP_VERSION}-intl \
-                    php${PHP_VERSION}-bcmath \
-                    php${PHP_VERSION}-ldap \
-                    php${PHP_VERSION}-xml \
-                    php${PHP_VERSION}-zip \
-                    php${PHP_VERSION}-sqlite3 \
+                     php \
+                     php-curl \
+                     php-cli \
+                     php-mysql \
+                     php-gd \
+                     php-mbstring \
+                     php-intl \
+                     php-bcmath \
+                     php-ldap \
+                     php-xml \
+                     php-zip \
+                     php-sqlite3 \
                     php-pear \
                     pkg-config \
                     sipsak \
@@ -257,25 +256,18 @@ RUN set -x && \
     git checkout tags/3.1.18 && \
     mkdir build && \
     cd build && \
-    cmake ../ -LH -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DWITH_SSL=OPENSSL && \
+    cmake ../ -LH -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_STANDARD=17 -DCMAKE_C_FLAGS=-std=gnu17 -DCMAKE_INSTALL_PREFIX=/usr/local -DWITH_SSL=OPENSSL && \
     cmake --build . --config Release && \
     make install && \
     ln -sf /usr/local/lib/mariadb/libmaodbc.so /usr/local/lib/libmaodbc.so
-
-### Build SpanDSP
-RUN set -x && \
-    mkdir -p /usr/src/spandsp && \
-    curl -kL http://sources.buildroot.net/spandsp/spandsp-${SPANDSP_VERSION}.tar.gz | tar xvfz - --strip 1 -C /usr/src/spandsp && \
-    cd /usr/src/spandsp && \
-    ./configure --prefix=/usr && \
-    make && \
-    make install
 
 ### Build Asterisk
 RUN set -x && \
     cd /usr/src && \
     mkdir -p asterisk && \
-    curl -sSL http://downloads.asterisk.org/pub/telephony/asterisk/releases/asterisk-${ASTERISK_VERSION}.tar.gz | tar xvfz - --strip 1 -C /usr/src/asterisk && \
+    curl -fsSL -o /tmp/asterisk.tar.gz http://downloads.asterisk.org/pub/telephony/asterisk/releases/asterisk-${ASTERISK_VERSION}.tar.gz && \
+    python3 -c 'import os, shutil, tarfile; t=tarfile.open("/tmp/asterisk.tar.gz"); tmp="/tmp/asterisk-extract"; t.extractall(tmp, filter="data"); root=os.path.join(tmp, os.listdir(tmp)[0]); [shutil.move(os.path.join(root, n), "/usr/src/asterisk/" + n) for n in os.listdir(root)]' && \
+    rm -f /tmp/asterisk.tar.gz && \
     cd /usr/src/asterisk/ && \
     make distclean && \
     contrib/scripts/get_mp3_source.sh && \
@@ -338,13 +330,15 @@ RUN set -x && \
     git clone https://github.com/BelledonneCommunications/bcg729 /usr/src/bcg729 && \
     cd /usr/src/bcg729 && \
     git checkout tags/$BCG729_VERSION && \
-    cmake . -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_PREFIX_PATH=/lib && \
+    cmake . -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_PREFIX_PATH=/lib && \
     make && \
     make install
 
 RUN set -x && \
     mkdir -p /usr/src/asterisk-g72x && \
-    curl https://bitbucket.org/arkadi/asterisk-g72x/get/master.tar.gz | tar xvfz - --strip 1 -C /usr/src/asterisk-g72x && \
+    curl -fsSL -o /tmp/asterisk-g72x.tar.gz https://bitbucket.org/arkadi/asterisk-g72x/get/master.tar.gz && \
+    python3 -c 'import os, shutil, tarfile; t=tarfile.open("/tmp/asterisk-g72x.tar.gz"); tmp="/tmp/asterisk-g72x-extract"; t.extractall(tmp, filter="data"); root=os.path.join(tmp, os.listdir(tmp)[0]); [shutil.move(os.path.join(root, n), "/usr/src/asterisk-g72x/" + n) for n in os.listdir(root)]' && \
+    rm -f /tmp/asterisk-g72x.tar.gz && \
     cd /usr/src/asterisk-g72x && \
     ./autogen.sh && \
     ./configure --prefix=/usr --with-bcg729 && \
